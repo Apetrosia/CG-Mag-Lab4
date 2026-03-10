@@ -151,13 +151,30 @@ in vec2 vUV;
 
 uniform sampler2D uTextureMat;
 uniform sampler2D uTextureNum;
+uniform float uMatWeight;
+uniform float uNumWeight;
 
 out vec4 outColor;
 
 void main() {
     vec4 tex1 = texture(uTextureMat, vUV);
     vec4 tex2 = texture(uTextureNum, vUV);
-    outColor = mix(tex1 * vec4(vColor, 1.0), tex2, tex2.a);
+
+    vec4 base = vec4(vColor, 1.0);
+    
+    float matInfluence = uMatWeight;
+    float numInfluence = uNumWeight * tex2.a;
+
+    float total = matInfluence + numInfluence;
+    if (total > 1.0) {
+        matInfluence /= total;
+        numInfluence /= total;
+    }
+
+    // Финальный цвет
+    vec4 result = base * (1.0 - matInfluence - numInfluence) + tex1 * matInfluence + tex2 * numInfluence;
+
+    outColor = result;
 }
 `;
 
@@ -261,6 +278,9 @@ gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 8 * 4, 3 * 4);
 gl.enableVertexAttribArray(uvLoc);
 gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 8 * 4, 6 * 4);
 
+matWeight = 0.5
+numWeight = 0.5
+
 document.addEventListener("keydown", (e) => {
     if (e.key === "w" || e.key === "W") anglex += 0.02;
     if (e.key === "s" || e.key === "S") anglex -= 0.02;
@@ -268,12 +288,18 @@ document.addEventListener("keydown", (e) => {
     if (e.key === "a" || e.key === "A") angley -= 0.02;
     if (e.key === "q" || e.key === "Q") anglez += 0.02;
     if (e.key === "e" || e.key === "E") anglez -= 0.02;
+    if (e.key === "r" || e.key === "R") matWeight = Math.min(1.0, matWeight + 0.05);
+    if (e.key === "f" || e.key === "F") matWeight = Math.max(0.0, matWeight - 0.05);
+    if (e.key === "t" || e.key === "T") numWeight = Math.min(1.0, numWeight + 0.05);
+    if (e.key === "g" || e.key === "G") numWeight = Math.max(0.0, numWeight - 0.05);
     
 });
 
 const rotationLoc = gl.getUniformLocation(program, "uRotation");
 const modelLoc = gl.getUniformLocation(program, "uModel");
 const projectionLoc = gl.getUniformLocation(program, "uProjection");
+const matWeightLoc = gl.getUniformLocation(program, "uMatWeight");
+const numWeightLoc = gl.getUniformLocation(program, "uNumWeight");
 
 gl.enable(gl.DEPTH_TEST);
 
@@ -350,10 +376,15 @@ function renderCube(num, tx) {
     gl.bindTexture(gl.TEXTURE_2D, textureNum[num]);
     gl.uniform1i(texLoc2, 1);
 
+    gl.uniform1f(matWeightLoc, matWeight);
+    gl.uniform1f(numWeightLoc, numWeight);
+
     gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
 }
 
 // ================== РЕНДЕР ==================
+
+const infoDiv = document.getElementById("info");
 
 function render() {
     gl.clearColor(0,0,0,1);
@@ -366,6 +397,8 @@ function render() {
     anglex += 0.01;
     angley += 0.01;
     anglez += 0.01;
+
+    infoDiv.innerHTML = `Материал: ${matWeight.toFixed(2)} | Цифра: ${numWeight.toFixed(2)}`;
 
     requestAnimationFrame(render);
 }

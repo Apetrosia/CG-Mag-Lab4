@@ -1,0 +1,373 @@
+const canvas = document.getElementById("glcanvas");
+const gl = canvas.getContext("webgl2");
+
+if (!gl) {
+    alert("WebGL2 not supported");
+}
+
+function resizeCanvas() {
+    canvas.height = window.innerHeight;
+    canvas.width = window.innerWidth;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+}
+
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+// ================== ПОВОРОТ ==================
+
+let anglex = 0
+let angley = 0
+let anglez = 0
+let scalex = 1
+let scaley = 1
+let scalez = 1
+let tx = 0
+let ty = 0
+let tz = 0
+
+function createTransformMatrix(
+    angleX = 0,
+    angleY = 0,
+    angleZ = 0,
+    scalex = 1,
+    scaley = 1,
+    scalez = 1,
+    tx = 0,
+    ty = 0,
+    tz = 0
+) {
+
+    const cx = Math.cos(angleX);
+    const sx = Math.sin(angleX);
+
+    const cy = Math.cos(angleY);
+    const sy = Math.sin(angleY);
+
+    const cz = Math.cos(angleZ);
+    const sz = Math.sin(angleZ);
+
+    // Rotation X
+    const rx = new Float32Array([
+        1, 0, 0, 0,
+        0, cx, sx, 0,
+        0, -sx, cx, 0,
+        0, 0, 0, 1
+    ]);
+
+    // Rotation Y
+    const ry = new Float32Array([
+        cy, 0, -sy, 0,
+        0, 1, 0, 0,
+        sy, 0, cy, 0,
+        0, 0, 0, 1
+    ]);
+
+    // Rotation Z
+    const rz = new Float32Array([
+        cz, sz, 0, 0,
+        -sz, cz, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1
+    ]);
+
+    // Scale
+    const s = new Float32Array([
+        scalex, 0, 0, 0,
+        0, scaley, 0, 0,
+        0, 0, scalez, 0,
+        0, 0, 0, 1
+    ]);
+
+    function multiply(a, b) {
+        const out = new Float32Array(16);
+
+        for (let col = 0; col < 4; col++) {
+            for (let row = 0; row < 4; row++) {
+                out[col * 4 + row] =
+                    a[0 * 4 + row] * b[col * 4 + 0] +
+                    a[1 * 4 + row] * b[col * 4 + 1] +
+                    a[2 * 4 + row] * b[col * 4 + 2] +
+                    a[3 * 4 + row] * b[col * 4 + 3];
+            }
+        }
+
+        return out;
+    }
+
+    // R = Rz * Ry * Rx
+    const rxy = multiply(ry, rx);
+    const rxyz = multiply(rz, rxy);
+
+    // RS = R * S
+    const rs = multiply(rxyz, s);
+
+    // Добавляем трансляцию (последний столбец)
+    rs[12] = tx;
+    rs[13] = ty;
+    rs[14] = tz;
+    rs[15] = 1;
+
+    return rs;
+}
+
+function createPerspectiveMatrix(fov, aspect, near, far) {
+    const f = 1.0 / Math.tan(fov / 2);
+    const nf = 1 / (near - far);
+
+    return new Float32Array([
+        f / aspect, 0, 0, 0,
+        0, f, 0, 0,
+        0, 0, (far + near) * nf, -1,
+        0, 0, (2 * far * near) * nf, 0
+    ]);
+}
+
+// ================== ШЕЙДЕРЫ ==================
+
+const vsSource = `#version 300 es
+in vec3 aPosition;
+in vec3 aColor;
+in vec2 aUV;
+out vec2 vUV;
+
+uniform mat4 uModel;
+uniform mat4 uProjection;
+
+out vec3 vColor;
+
+void main() {
+    gl_Position = uProjection * uModel * vec4(aPosition, 1.0);
+    vColor = aColor;
+    vUV = aUV;
+}
+`;
+
+const fsSource = `#version 300 es
+precision mediump float;
+
+in vec3 vColor;
+in vec2 vUV;
+
+uniform sampler2D uTextureMat;
+uniform sampler2D uTextureNum;
+
+out vec4 outColor;
+
+void main() {
+    vec4 tex1 = texture(uTextureMat, vUV);
+    vec4 tex2 = texture(uTextureNum, vUV);
+    outColor = mix(tex1 * vec4(vColor, 1.0), tex2, tex2.a);
+}
+`;
+
+function createShader(gl, type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error(gl.getShaderInfoLog(shader));
+        gl.deleteShader(shader);
+    }
+
+    return shader;
+}
+
+const vertexShader = createShader(gl, gl.VERTEX_SHADER, vsSource);
+const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+
+const program = gl.createProgram();
+gl.attachShader(program, vertexShader);
+gl.attachShader(program, fragmentShader);
+gl.linkProgram(program);
+
+if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.error(gl.getProgramInfoLog(program));
+}
+
+gl.useProgram(program);
+
+// ================== ГЕОМЕТРИЯ ==================
+
+const vertices = new Float32Array([
+    // Задняя грань
+  -0.5,-0.5, 0.5,   1,0,0,   0,0,
+   0.5,-0.5, 0.5,   0,1,0,   1,0,
+   0.5, 0.5, 0.5,   0,0,1,   1,1,
+  -0.5, 0.5, 0.5,   1,1,0,   0,1,
+
+  // Передняя грань
+  -0.5,-0.5,-0.5,   1,0,1,   0,0,
+   0.5,-0.5,-0.5,   0,1,1,   1,0,
+   0.5, 0.5,-0.5,   1,1,1,   1,1,
+  -0.5, 0.5,-0.5,   0,0,0,   0,1,
+
+  // Левая грань
+  -0.5,-0.5,-0.5,   1,0,0,   0,0,
+  -0.5,-0.5, 0.5,   1,0,0,   1,0,
+  -0.5, 0.5, 0.5,   1,0,0,   1,1,
+  -0.5, 0.5,-0.5,   1,0,0,   0,1,
+
+  // Правая грань
+   0.5,-0.5,-0.5,   0,1,0,   0,0,
+   0.5,-0.5, 0.5,   0,1,0,   1,0,
+   0.5, 0.5, 0.5,   0,1,0,   1,1,
+   0.5, 0.5,-0.5,   0,1,0,   0,1,
+
+  // Верхняя грань
+  -0.5, 0.5, 0.5,   0,0,1,   0,0,
+   0.5, 0.5, 0.5,   0,0,1,   1,0,
+   0.5, 0.5,-0.5,   0,0,1,   1,1,
+  -0.5, 0.5,-0.5,   0,0,1,   0,1,
+
+  // Нижняя грань
+  -0.5,-0.5,-0.5,   1,1,0,   0,0,
+   0.5,-0.5,-0.5,   1,1,0,   1,0,
+   0.5,-0.5, 0.5,   1,1,0,   1,1,
+  -0.5,-0.5, 0.5,   1,1,0,   0,1
+]);
+
+const indices = new Uint16Array([
+  0,1,2, 0,2,3,
+  4,5,6, 4,6,7,
+  8,9,10, 8,10,11,
+  12,13,14, 12,14,15,
+  16,17,18, 16,18,19,
+  20,21,22, 20,22,23
+]);
+
+const vao = gl.createVertexArray();
+gl.bindVertexArray(vao);
+
+const vbo = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+const ebo = gl.createBuffer();
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+
+const posLoc = gl.getAttribLocation(program, "aPosition");
+const colorLoc = gl.getAttribLocation(program, "aColor");
+const uvLoc = gl.getAttribLocation(program, "aUV")
+
+gl.enableVertexAttribArray(posLoc);
+gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 8 * 4, 0);
+
+gl.enableVertexAttribArray(colorLoc);
+gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 8 * 4, 3 * 4);
+
+gl.enableVertexAttribArray(uvLoc);
+gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 8 * 4, 6 * 4);
+
+document.addEventListener("keydown", (e) => {
+    if (e.key === "w" || e.key === "W") anglex += 0.02;
+    if (e.key === "s" || e.key === "S") anglex -= 0.02;
+    if (e.key === "d" || e.key === "D") angley += 0.02;
+    if (e.key === "a" || e.key === "A") angley -= 0.02;
+    if (e.key === "q" || e.key === "Q") anglez += 0.02;
+    if (e.key === "e" || e.key === "E") anglez -= 0.02;
+    
+});
+
+const rotationLoc = gl.getUniformLocation(program, "uRotation");
+const modelLoc = gl.getUniformLocation(program, "uModel");
+const projectionLoc = gl.getUniformLocation(program, "uProjection");
+
+gl.enable(gl.DEPTH_TEST);
+
+// ================= ТЕКСТУРЫ =================
+
+const textureMat = []
+const textureNum = []
+
+function loadTexture(src) {
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+
+    const img = new Image();
+    img.src = src;
+
+    img.onload = () => {
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(
+            gl.TEXTURE_2D,
+            0,
+            gl.RGBA,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
+            img
+        );
+    };
+
+    return texture;
+}
+
+textureMat.push(loadTexture("textures/gold.jpg"));
+textureMat.push(loadTexture("textures/copper.jpg"));
+textureMat.push(loadTexture("textures/tree.jpg"));
+
+textureNum.push(loadTexture("textures/place11.png"));
+textureNum.push(loadTexture("textures/place22.png"));
+textureNum.push(loadTexture("textures/place33.png"));
+
+function renderCube(num, tx) {
+    const aspect = canvas.width / canvas.height;
+
+    const projection = createPerspectiveMatrix(
+        Math.PI / 4,  // 45°
+        aspect,
+        0.1,
+        100
+    );
+
+    const model = createTransformMatrix(
+        anglex,
+        angley,
+        anglez,
+        scalex * 0.5,
+        scaley * 0.5,
+        scalez * 0.5,
+        tx, 0, -4
+    );
+
+    gl.uniformMatrix4fv(modelLoc, false, model);
+    gl.uniformMatrix4fv(projectionLoc, false, projection);
+
+     const texLoc1 = gl.getUniformLocation(program, "uTextureMat");
+    const texLoc2 = gl.getUniformLocation(program, "uTextureNum");
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, textureMat[num]);
+    gl.uniform1i(texLoc1, 0);
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, textureNum[num]);
+    gl.uniform1i(texLoc2, 1);
+
+    gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+}
+
+// ================== РЕНДЕР ==================
+
+function render() {
+    gl.clearColor(0,0,0,1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    
+    renderCube(0, 0)
+    renderCube(1, -1)
+    renderCube(2, 1)
+
+    anglex += 0.01;
+    angley += 0.01;
+    anglez += 0.01;
+
+    requestAnimationFrame(render);
+}
+
+render();

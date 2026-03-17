@@ -14,8 +14,6 @@ function resizeCanvas() {
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 
-// ================== ПОВОРОТ ==================
-
 let anglex = 0
 let angley = 0
 let anglez = 0
@@ -102,7 +100,6 @@ function createTransformMatrix(
     // RS = R * S
     const rs = multiply(rxyz, s);
 
-    // Добавляем трансляцию (последний столбец)
     rs[12] = tx;
     rs[13] = ty;
     rs[14] = tz;
@@ -123,8 +120,9 @@ function createPerspectiveMatrix(fov, aspect, near, far) {
     ]);
 }
 
-// ================== ШЕЙДЕРЫ ==================
+// ШЕЙДЕРЫ
 
+// Кубы
 const vsSource = `#version 300 es
 in vec3 aPosition;
 in vec3 aColor;
@@ -178,6 +176,29 @@ void main() {
 }
 `;
 
+// Модели
+const vsModel = `#version 300 es
+in vec3 aPosition;
+in vec2 aUV;
+out vec2 vUV;
+uniform mat4 uModel;
+uniform mat4 uProjection;
+void main() {
+    gl_Position = uProjection * uModel * vec4(aPosition, 1.0);
+    vUV = aUV;
+}
+`;
+
+const fsModel = `#version 300 es
+precision mediump float;
+in vec2 vUV;
+uniform sampler2D uTexture;
+out vec4 outColor;
+void main() {
+    outColor = texture(uTexture, vUV);
+}
+`;
+
 function createShader(gl, type, source) {
     const shader = gl.createShader(type);
     gl.shaderSource(shader, source);
@@ -205,7 +226,24 @@ if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
 
 gl.useProgram(program);
 
-// ================== ГЕОМЕТРИЯ ==================
+// Программа для моделей
+const vertexShaderModel = createShader(gl, gl.VERTEX_SHADER, vsModel);
+const fragmentShaderModel = createShader(gl, gl.FRAGMENT_SHADER, fsModel);
+const programModel = gl.createProgram();
+gl.attachShader(programModel, vertexShaderModel);
+gl.attachShader(programModel, fragmentShaderModel);
+gl.linkProgram(programModel);
+
+if (!gl.getProgramParameter(programModel, gl.LINK_STATUS)) {
+    console.error(gl.getProgramInfoLog(programModel));
+}
+
+// Uniform locations для модели
+const modelLocModel = gl.getUniformLocation(programModel, "uModel");
+const projLocModel = gl.getUniformLocation(programModel, "uProjection");
+const texLocModel = gl.getUniformLocation(programModel, "uTexture");
+
+// ================== ГЕОМЕТРИЯ КУБОВ ==================
 
 const vertices = new Float32Array([
     // Задняя грань
@@ -267,7 +305,7 @@ gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
 
 const posLoc = gl.getAttribLocation(program, "aPosition");
 const colorLoc = gl.getAttribLocation(program, "aColor");
-const uvLoc = gl.getAttribLocation(program, "aUV")
+const uvLoc = gl.getAttribLocation(program, "aUV");
 
 gl.enableVertexAttribArray(posLoc);
 gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 8 * 4, 0);
@@ -278,22 +316,7 @@ gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 8 * 4, 3 * 4);
 gl.enableVertexAttribArray(uvLoc);
 gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 8 * 4, 6 * 4);
 
-matWeight = 0.5
-numWeight = 0.5
-
-document.addEventListener("keydown", (e) => {
-    if (e.key === "w" || e.key === "W") anglex += 0.02;
-    if (e.key === "s" || e.key === "S") anglex -= 0.02;
-    if (e.key === "d" || e.key === "D") angley += 0.02;
-    if (e.key === "a" || e.key === "A") angley -= 0.02;
-    if (e.key === "q" || e.key === "Q") anglez += 0.02;
-    if (e.key === "e" || e.key === "E") anglez -= 0.02;
-    if (e.key === "r" || e.key === "R") matWeight = Math.min(1.0, matWeight + 0.05);
-    if (e.key === "f" || e.key === "F") matWeight = Math.max(0.0, matWeight - 0.05);
-    if (e.key === "t" || e.key === "T") numWeight = Math.min(1.0, numWeight + 0.05);
-    if (e.key === "g" || e.key === "G") numWeight = Math.max(0.0, numWeight - 0.05);
-    
-});
+gl.bindVertexArray(null);
 
 const rotationLoc = gl.getUniformLocation(program, "uRotation");
 const modelLoc = gl.getUniformLocation(program, "uModel");
@@ -303,10 +326,7 @@ const numWeightLoc = gl.getUniformLocation(program, "uNumWeight");
 
 gl.enable(gl.DEPTH_TEST);
 
-// ================= ТЕКСТУРЫ =================
-
-const textureMat = []
-const textureNum = []
+// ТЕКСТУРЫ
 
 function loadTexture(src) {
     const texture = gl.createTexture();
@@ -334,6 +354,9 @@ function loadTexture(src) {
     return texture;
 }
 
+const textureMat = [];
+const textureNum = [];
+
 textureMat.push(loadTexture("textures/gold.jpg"));
 textureMat.push(loadTexture("textures/copper.jpg"));
 textureMat.push(loadTexture("textures/tree.jpg"));
@@ -342,11 +365,125 @@ textureNum.push(loadTexture("textures/place11.png"));
 textureNum.push(loadTexture("textures/place22.png"));
 textureNum.push(loadTexture("textures/place33.png"));
 
+let matWeight = 0.5;
+let numWeight = 0.5;
+
+document.addEventListener("keydown", (e) => {
+    if (e.key === "r" || e.key === "R") matWeight = Math.min(1.0, matWeight + 0.05);
+    if (e.key === "f" || e.key === "F") matWeight = Math.max(0.0, matWeight - 0.05);
+    if (e.key === "t" || e.key === "T") numWeight = Math.min(1.0, numWeight + 0.05);
+    if (e.key === "g" || e.key === "G") numWeight = Math.max(0.0, numWeight - 0.05);
+});
+
+const models = [];
+
+async function loadOBJ(url) {
+    const resp = await fetch(url);
+    const text = await resp.text();
+    const lines = text.split('\n');
+    
+    const positions = [];
+    const texcoords = [];
+    const vertices = [];
+    
+    for (let line of lines) {
+        line = line.trim();
+        if (line.startsWith('v ')) {
+            const parts = line.split(/\s+/);
+            positions.push(
+                parseFloat(parts[1]),
+                parseFloat(parts[2]),
+                parseFloat(parts[3])
+            );
+        } else if (line.startsWith('vt ')) {
+            const parts = line.split(/\s+/);
+            texcoords.push(
+                parseFloat(parts[1]),
+                1.0 - parseFloat(parts[2])
+            );
+        } else if (line.startsWith('f ')) {
+            const parts = line.split(/\s+/);
+            const faceIndices = [];
+            for (let i = 1; i < parts.length; i++) {
+                const indices = parts[i].split('/');
+                const posIdx = parseInt(indices[0]) - 1;
+                const texIdx = indices[1] ? parseInt(indices[1]) - 1 : null;
+                faceIndices.push({ posIdx, texIdx });
+            }
+            for (let i = 1; i < faceIndices.length - 1; i++) {
+                const a = faceIndices[0];
+                const b = faceIndices[i];
+                const c = faceIndices[i + 1];
+                [a, b, c].forEach(idx => {
+                    const px = positions[idx.posIdx * 3];
+                    const py = positions[idx.posIdx * 3 + 1];
+                    const pz = positions[idx.posIdx * 3 + 2];
+                    let u = 0, v = 0;
+                    if (idx.texIdx !== null && texcoords.length) {
+                        u = texcoords[idx.texIdx * 2];
+                        v = texcoords[idx.texIdx * 2 + 1];
+                    }
+                    vertices.push(px, py, pz, u, v);
+                });
+            }
+        }
+    }
+    
+    return {
+        vertices: new Float32Array(vertices),
+        count: vertices.length / 5
+    };
+}
+
+async function loadModel(name, posX, posY, scale) {
+    const objUrl = `models/${name}.obj`;
+    const texUrl = `models/${name}.png`;
+    
+    try {
+        const objData = await loadOBJ(objUrl);
+        const texture = loadTexture(texUrl);
+        
+        const vao = gl.createVertexArray();
+        gl.bindVertexArray(vao);
+        
+        const vbo = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferData(gl.ARRAY_BUFFER, objData.vertices, gl.STATIC_DRAW);
+        
+        const posLoc = gl.getAttribLocation(programModel, "aPosition");
+        const uvLoc = gl.getAttribLocation(programModel, "aUV");
+        
+        gl.enableVertexAttribArray(posLoc);
+        gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 5 * 4, 0);
+        gl.enableVertexAttribArray(uvLoc);
+        gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 5 * 4, 3 * 4);
+        
+        gl.bindVertexArray(null);
+        
+        models.push({
+            vao,
+            count: objData.count,
+            texture,
+            posX,
+            posY,
+            scale
+        });
+        
+        console.log(`Модель ${name} загружена`);
+    } catch (e) {
+        console.error(`Ошибка загрузки ${name}:`, e);
+    }
+}
+
+loadModel('bananaCat', -1, 0.07, 0.5);
+loadModel('Sherlock', 0, 0.25, 2);
+loadModel('GrumpyCat', 1, 0.25, 1);
+
 function renderCube(num, tx) {
     const aspect = canvas.width / canvas.height;
 
     const projection = createPerspectiveMatrix(
-        Math.PI / 4,  // 45°
+        Math.PI / 4,  // 45
         aspect,
         0.1,
         100
@@ -359,13 +496,13 @@ function renderCube(num, tx) {
         scalex * 0.5,
         scaley * 0.5,
         scalez * 0.5,
-        tx, 0, -4
+        tx, -0.5, -4
     );
 
     gl.uniformMatrix4fv(modelLoc, false, model);
     gl.uniformMatrix4fv(projectionLoc, false, projection);
 
-     const texLoc1 = gl.getUniformLocation(program, "uTextureMat");
+    const texLoc1 = gl.getUniformLocation(program, "uTextureMat");
     const texLoc2 = gl.getUniformLocation(program, "uTextureNum");
 
     gl.activeTexture(gl.TEXTURE0);
@@ -379,27 +516,54 @@ function renderCube(num, tx) {
     gl.uniform1f(matWeightLoc, matWeight);
     gl.uniform1f(numWeightLoc, numWeight);
 
+    gl.bindVertexArray(vao);
     gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
 }
 
-// ================== РЕНДЕР ==================
+// РЕНДЕР
 
 const infoDiv = document.getElementById("info");
 
 function render() {
-    gl.clearColor(0,0,0,1);
+    gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     
-    renderCube(0, 0)
-    renderCube(1, -1)
-    renderCube(2, 1)
-
+    gl.useProgram(program);
+    renderCube(0, 0);
+    renderCube(1, -1);
+    renderCube(2, 1);
+    
+    if (models.length > 0) {
+        gl.useProgram(programModel);
+        
+        const aspect = canvas.width / canvas.height;
+        const projection = createPerspectiveMatrix(Math.PI / 4, aspect, 0.1, 100);
+        
+        models.forEach(model => {
+            const modelMatrix = createTransformMatrix(
+                0, angley, 0,
+                model.scale, model.scale, model.scale,
+                model.posX, model.posY, -4
+            );
+            
+            gl.uniformMatrix4fv(modelLocModel, false, modelMatrix);
+            gl.uniformMatrix4fv(projLocModel, false, projection);
+            
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, model.texture);
+            gl.uniform1i(texLocModel, 0);
+            
+            gl.bindVertexArray(model.vao);
+            gl.drawArrays(gl.TRIANGLES, 0, model.count);
+        });
+    }
+    
     anglex += 0.01;
     angley += 0.01;
     anglez += 0.01;
-
-    infoDiv.innerHTML = `Материал: ${matWeight.toFixed(2)} | Цифра: ${numWeight.toFixed(2)}`;
-
+    
+    infoDiv.innerHTML = `Материал: ${matWeight.toFixed(2)} | Цифра: ${numWeight.toFixed(2)} | Модели: ${models.length} загружено`;
+    
     requestAnimationFrame(render);
 }
 

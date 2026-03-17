@@ -474,8 +474,8 @@ async function loadModel(name, posX, posY, scale) {
     }
 }
 
-loadModel('bananaCat', -1, 0.07, 0.5);
-loadModel('Sherlock', 0, 0.25, 2);
+loadModel('bananaCat', 0, 0.07, 0.5);
+loadModel('Sherlock', -1, 0.25, 2);
 loadModel('GrumpyCat', 1, 0.25, 1);
 
 function renderCube(num, tx) {
@@ -502,8 +502,8 @@ function renderCube(num, tx) {
     gl.uniformMatrix4fv(projectionLoc, false, projection);
 
     let baseColor;
-    if (num === 0) baseColor = [0.8, 0.5, 0.2];
-    else if (num === 1) baseColor = [1.0, 0.84, 0.0];
+    if (num === 0) baseColor = [1.0, 0.84, 0.0];
+    else if (num === 1) baseColor = [0.8, 0.5, 0.2];
     else baseColor = [0.55, 0.55, 0.55];
     gl.uniform3fv(baseColorLoc, baseColor);
 

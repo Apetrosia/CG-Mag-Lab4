@@ -121,7 +121,6 @@ function createPerspectiveMatrix(fov, aspect, near, far) {
 }
 
 // ШЕЙДЕРЫ
-
 // Кубы
 const vsSource = `#version 300 es
 in vec3 aPosition;

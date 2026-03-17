@@ -149,29 +149,21 @@ in vec2 vUV;
 
 uniform sampler2D uTextureMat;
 uniform sampler2D uTextureNum;
-uniform float uMatWeight;
+uniform float ucolorWeight;
 uniform float uNumWeight;
 
 out vec4 outColor;
 
 void main() {
-    vec4 tex1 = texture(uTextureMat, vUV);
+    vec3 tex1 = texture(uTextureMat, vUV).rgb;
     vec4 tex2 = texture(uTextureNum, vUV);
 
-    vec4 base = vec4(vColor, 1.0);
-    
-    float matInfluence = uMatWeight;
-    float numInfluence = uNumWeight * tex2.a;
+    float numberMask = clamp(uNumWeight, 0.0, 1.0) * tex2.a;
+    vec3 resTex = mix(tex1, tex2.rgb, numberMask);
+    vec3 resColor = vColor * resTex;
+    vec3 finalColor = mix(resTex, resColor, clamp(ucolorWeight, 0.0, 1.0));
 
-    float total = matInfluence + numInfluence;
-    if (total > 1.0) {
-        matInfluence /= total;
-        numInfluence /= total;
-    }
-
-    vec4 result = base * (1.0 - matInfluence - numInfluence) + tex1 * matInfluence + tex2 * numInfluence;
-
-    outColor = result;
+    outColor = vec4(clamp(finalColor, 0.0, 1.0), 1.0);
 }
 `;
 
@@ -320,7 +312,7 @@ gl.bindVertexArray(null);
 const rotationLoc = gl.getUniformLocation(program, "uRotation");
 const modelLoc = gl.getUniformLocation(program, "uModel");
 const projectionLoc = gl.getUniformLocation(program, "uProjection");
-const matWeightLoc = gl.getUniformLocation(program, "uMatWeight");
+const colorWeightLoc = gl.getUniformLocation(program, "ucolorWeight");
 const numWeightLoc = gl.getUniformLocation(program, "uNumWeight");
 
 gl.enable(gl.DEPTH_TEST);
@@ -360,16 +352,16 @@ textureMat.push(loadTexture("textures/gold.jpg"));
 textureMat.push(loadTexture("textures/copper.jpg"));
 textureMat.push(loadTexture("textures/tree.jpg"));
 
-textureNum.push(loadTexture("textures/place11.png"));
-textureNum.push(loadTexture("textures/place22.png"));
-textureNum.push(loadTexture("textures/place33.png"));
+textureNum.push(loadTexture("textures/num_1.png"));
+textureNum.push(loadTexture("textures/num_2.png"));
+textureNum.push(loadTexture("textures/num_3.png"));
 
-let matWeight = 0.5;
+let colorWeight = 0.5;
 let numWeight = 0.5;
 
 document.addEventListener("keydown", (e) => {
-    if (e.key === "r" || e.key === "R") matWeight = Math.min(1.0, matWeight + 0.05);
-    if (e.key === "f" || e.key === "F") matWeight = Math.max(0.0, matWeight - 0.05);
+    if (e.key === "r" || e.key === "R") colorWeight = Math.min(1.0, colorWeight + 0.05);
+    if (e.key === "f" || e.key === "F") colorWeight = Math.max(0.0, colorWeight - 0.05);
     if (e.key === "t" || e.key === "T") numWeight = Math.min(1.0, numWeight + 0.05);
     if (e.key === "g" || e.key === "G") numWeight = Math.max(0.0, numWeight - 0.05);
 });
@@ -502,9 +494,9 @@ function renderCube(num, tx) {
     gl.uniformMatrix4fv(projectionLoc, false, projection);
 
     let baseColor;
-    if (num === 0) baseColor = [1.0, 0.84, 0.0];
-    else if (num === 1) baseColor = [0.55, 0.55, 0.55];
-    else baseColor = [0.8, 0.5, 0.2];
+    if (num === 0) baseColor = [1.0, 0.0, 0.0];//[1.0, 0.84, 0.0];
+    else if (num === 1) baseColor = [1.0, 0.0, 0.0];//[0.55, 0.55, 0.55];
+    else baseColor = [1.0, 0.0, 0.0];//[0.8, 0.5, 0.2];
     gl.uniform3fv(baseColorLoc, baseColor);
 
     const texLoc1 = gl.getUniformLocation(program, "uTextureMat");
@@ -518,7 +510,7 @@ function renderCube(num, tx) {
     gl.bindTexture(gl.TEXTURE_2D, textureNum[num]);
     gl.uniform1i(texLoc2, 1);
 
-    gl.uniform1f(matWeightLoc, matWeight);
+    gl.uniform1f(colorWeightLoc, colorWeight);
     gl.uniform1f(numWeightLoc, numWeight);
 
     gl.bindVertexArray(vao);
@@ -567,7 +559,7 @@ function render() {
     angley += 0.01;
     anglez += 0.01;
     
-    infoDiv.innerHTML = `Материал: ${matWeight.toFixed(2)} | Цифра: ${numWeight.toFixed(2)}`;
+    infoDiv.innerHTML = `Цвет: ${colorWeight.toFixed(2)} | Цифра: ${numWeight.toFixed(2)}`;
     
     requestAnimationFrame(render);
 }

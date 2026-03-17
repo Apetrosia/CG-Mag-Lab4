@@ -236,12 +236,11 @@ if (!gl.getProgramParameter(programModel, gl.LINK_STATUS)) {
     console.error(gl.getProgramInfoLog(programModel));
 }
 
-// Uniform locations для модели
 const modelLocModel = gl.getUniformLocation(programModel, "uModel");
 const projLocModel = gl.getUniformLocation(programModel, "uProjection");
 const texLocModel = gl.getUniformLocation(programModel, "uTexture");
 
-// ================== ГЕОМЕТРИЯ КУБОВ ==================
+// КУБЫ
 
 const vertices = new Float32Array([
     // Задняя грань
@@ -560,7 +559,7 @@ function render() {
     angley += 0.01;
     anglez += 0.01;
     
-    infoDiv.innerHTML = `Материал: ${matWeight.toFixed(2)} | Цифра: ${numWeight.toFixed(2)} | Модели: ${models.length} загружено`;
+    infoDiv.innerHTML = `Материал: ${matWeight.toFixed(2)} | Цифра: ${numWeight.toFixed(2)}`;
     
     requestAnimationFrame(render);
 }

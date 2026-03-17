@@ -168,7 +168,6 @@ void main() {
         numInfluence /= total;
     }
 
-    // Финальный цвет
     vec4 result = base * (1.0 - matInfluence - numInfluence) + tex1 * matInfluence + tex2 * numInfluence;
 
     outColor = result;

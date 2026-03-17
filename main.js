@@ -475,8 +475,8 @@ async function loadModel(name, posX, posY, scale) {
 }
 
 loadModel('bananaCat', 0, 0.07, 0.5);
-loadModel('Sherlock', -1, 0.25, 2);
-loadModel('GrumpyCat', 1, 0.25, 1);
+loadModel('Sherlock', 1, 0.25, 2);
+loadModel('GrumpyCat', -1, 0.25, 1);
 
 function renderCube(num, tx) {
     const aspect = canvas.width / canvas.height;
@@ -503,8 +503,8 @@ function renderCube(num, tx) {
 
     let baseColor;
     if (num === 0) baseColor = [1.0, 0.84, 0.0];
-    else if (num === 1) baseColor = [0.8, 0.5, 0.2];
-    else baseColor = [0.55, 0.55, 0.55];
+    else if (num === 1) baseColor = [0.55, 0.55, 0.55];
+    else baseColor = [0.8, 0.5, 0.2];
     gl.uniform3fv(baseColorLoc, baseColor);
 
     const texLoc1 = gl.getUniformLocation(program, "uTextureMat");

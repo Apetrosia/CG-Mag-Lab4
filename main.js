@@ -128,6 +128,7 @@ in vec3 aColor;
 in vec2 aUV;
 out vec2 vUV;
 
+uniform vec3 uBaseColor;
 uniform mat4 uModel;
 uniform mat4 uProjection;
 
@@ -135,7 +136,7 @@ out vec3 vColor;
 
 void main() {
     gl_Position = uProjection * uModel * vec4(aPosition, 1.0);
-    vColor = aColor;
+    vColor = uBaseColor;
     vUV = aUV;
 }
 `;
@@ -236,6 +237,7 @@ if (!gl.getProgramParameter(programModel, gl.LINK_STATUS)) {
     console.error(gl.getProgramInfoLog(programModel));
 }
 
+const baseColorLoc = gl.getUniformLocation(program, "uBaseColor");
 const modelLocModel = gl.getUniformLocation(programModel, "uModel");
 const projLocModel = gl.getUniformLocation(programModel, "uProjection");
 const texLocModel = gl.getUniformLocation(programModel, "uTexture");
@@ -498,6 +500,12 @@ function renderCube(num, tx) {
 
     gl.uniformMatrix4fv(modelLoc, false, model);
     gl.uniformMatrix4fv(projectionLoc, false, projection);
+
+    let baseColor;
+    if (num === 0) baseColor = [0.8, 0.5, 0.2];
+    else if (num === 1) baseColor = [1.0, 0.84, 0.0];
+    else baseColor = [0.55, 0.55, 0.55];
+    gl.uniform3fv(baseColorLoc, baseColor);
 
     const texLoc1 = gl.getUniformLocation(program, "uTextureMat");
     const texLoc2 = gl.getUniformLocation(program, "uTextureNum");
